@@ -48,7 +48,7 @@ class ChatImpl implements Chat {
         _newMessageController.add(message);
       }
 
-      if (message.chatState != null && !message.isDelayed) {
+      if (message?.chatState != null && !(message?.isDelayed ?? false)) {
         _remoteState = message.chatState;
         _remoteStateController.add(message.chatState);
       }
@@ -69,6 +69,43 @@ class ChatImpl implements Chat {
   }
 
   @override
+  void updateMessage(String id, String text) {
+
+  }
+
+  //<message to='room@muc.example.com' id='remove1'>
+  //   <remove id='bad1' xmlns='urn:xmpp:message-delete:0'/>
+  // </message>
+
+  @override
+  void deleteMessage(String id) {
+    var stanza =
+    MessageStanza(AbstractStanza.getRandomId(), MessageStanzaType.CHAT);
+    stanza.toJid = _jid;
+    stanza.fromJid = _connection.fullJid;
+
+    var stateElement = XmppElement();
+    stateElement.name = 'remove';
+    stateElement.addAttribute(XmppAttribute('id', id));
+    stateElement.addAttribute(XmppAttribute('xmlns', 'urn:xmpp:message-delete:0'));
+    stanza.addChild(stateElement);
+
+    var message = Message.fromStanza(stanza);
+    messages.remove(message);
+    _newMessageController.add(message);
+    
+    _connection.writeStanza(stanza);
+  }
+
+  //<message
+  //     from='bernardo@shakespeare.lit/pda'
+  //     to='francisco@shakespeare.lit'
+  //     type='chat'>
+  //   <body>Who's there?</body>
+  //   <active xmlns='http://jabber.org/protocol/chatstates'/>
+  // </message>
+
+  @override
   set myState(ChatState state) {
     var stanza =
         MessageStanza(AbstractStanza.getRandomId(), MessageStanzaType.CHAT);
@@ -76,8 +113,7 @@ class ChatImpl implements Chat {
     stanza.fromJid = _connection.fullJid;
     var stateElement = XmppElement();
     stateElement.name = state.toString().split('.').last.toLowerCase();
-    stateElement.addAttribute(
-        XmppAttribute('xmlns', 'http://jabber.org/protocol/chatstates'));
+    stateElement.addAttribute(XmppAttribute('xmlns', 'http://jabber.org/protocol/chatstates'));
     stanza.addChild(stateElement);
     _connection.writeStanza(stanza);
     _myState = state;
@@ -92,6 +128,8 @@ abstract class Chat {
   Stream<ChatState> get remoteStateStream;
   List<Message> messages;
   void sendMessage(String text);
+  void updateMessage(String id, String text);
+  void deleteMessage(String id);
   set myState(ChatState state);
 }
 
