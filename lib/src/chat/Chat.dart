@@ -57,8 +57,7 @@ class ChatImpl implements Chat {
 
   @override
   void sendMessage(String text) {
-    var stanza =
-        MessageStanza(AbstractStanza.getRandomId(), MessageStanzaType.CHAT);
+    var stanza = MessageStanza(AbstractStanza.getRandomId(), MessageStanzaType.CHAT);
     stanza.toJid = _jid;
     stanza.fromJid = _connection.fullJid;
     stanza.body = text;
@@ -68,9 +67,31 @@ class ChatImpl implements Chat {
     _connection.writeStanza(stanza);
   }
 
+  // https://stackoverflow.com/questions/57095305/how-to-edit-and-delete-particular-message-from-xmpp-in-android
+  
+  //<message to='juliet@capulet.net/balcony' id='good1'>
+  //   <body>But soft, what light through yonder window breaks?</body>
+  //   <replace id='bad1' xmlns='urn:xmpp:message-correct:0'/>
+  // </message>
+  
   @override
   void updateMessage(String id, String text) {
+    var stanza = MessageStanza(AbstractStanza.getRandomId(), MessageStanzaType.CHAT);
+    stanza.toJid = _jid;
+    stanza.fromJid = _connection.fullJid;
+    stanza.body = text;
 
+    var stateElement = XmppElement();
+    stateElement.name = 'replace';
+    stateElement.addAttribute(XmppAttribute('id', id));
+    stateElement.addAttribute(XmppAttribute('xmlns', 'urn:xmpp:message-correct:0'));
+    stanza.addChild(stateElement);
+
+    var message = Message.fromStanza(stanza);
+    int lastIndex = messages.indexWhere((element) => element?.messageStanza?.id == id);
+    messages[lastIndex] = message;
+    _newMessageController.add(message);
+    _connection.writeStanza(stanza);
   }
 
   //<message to='room@muc.example.com' id='remove1'>
@@ -93,7 +114,7 @@ class ChatImpl implements Chat {
     var message = Message.fromStanza(stanza);
     messages.remove(message);
     _newMessageController.add(message);
-    
+
     _connection.writeStanza(stanza);
   }
 
@@ -107,8 +128,7 @@ class ChatImpl implements Chat {
 
   @override
   set myState(ChatState state) {
-    var stanza =
-        MessageStanza(AbstractStanza.getRandomId(), MessageStanzaType.CHAT);
+    var stanza = MessageStanza(AbstractStanza.getRandomId(), MessageStanzaType.CHAT);
     stanza.toJid = _jid;
     stanza.fromJid = _connection.fullJid;
     var stateElement = XmppElement();
