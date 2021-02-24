@@ -19,10 +19,12 @@ class ChatImpl implements Chat {
   @override
   Jid get jid => _jid;
   ChatState _myState;
+
   @override
   ChatState get myState => _myState;
 
   ChatState _remoteState;
+
   @override
   ChatState get remoteState => _remoteState;
 
@@ -30,34 +32,47 @@ class ChatImpl implements Chat {
   List<Message> messages = [];
 
   final StreamController<Message> _newMessageController =
-      StreamController.broadcast();
+  StreamController.broadcast();
   final StreamController<ChatState> _remoteStateController =
-      StreamController.broadcast();
+  StreamController.broadcast();
 
   @override
   Stream<Message> get newMessageStream => _newMessageController.stream;
+
   @override
   Stream<ChatState> get remoteStateStream => _remoteStateController.stream;
 
   ChatImpl(this._jid, this._connection);
 
   void parseMessage(Message message) {
-    if (message.type == MessageStanzaType.CHAT) {
-      if (message.text != null && message.text.isNotEmpty) {
-        messages.add(message);
-        _newMessageController.add(message);
-      }
-
-      if (message?.chatState != null && !(message?.isDelayed ?? false)) {
-        _remoteState = message.chatState;
-        _remoteStateController.add(message.chatState);
-      }
+    if (message.text != null && message.text.isNotEmpty) {
+      messages.add(message);
+      _newMessageController.add(message);
     }
+
+    if (message?.chatState != null && !(message?.isDelayed ?? false)) {
+     if (_connection.fullJid.userAtDomain == message.to.userAtDomain) {
+       _remoteState = message.chatState;
+       _remoteStateController.add(message.chatState);
+     }
+    }
+
+    // if (message.type == MessageStanzaType.CHAT ) {
+    //   if (message.text != null && message.text.isNotEmpty) {
+    //     messages.add(message);
+    //     _newMessageController.add(message);
+    //   }
+    //
+    //   if (message?.chatState != null && !(message?.isDelayed ?? false)) {
+    //     _remoteState = message.chatState;
+    //     _remoteStateController.add(message.chatState);
+    //   }
+    // }
   }
 
   @override
   void sendMessage(String text) {
-    var stanza = MessageStanza(AbstractStanza.getRandomId(), MessageStanzaType.CHAT);
+    var stanza = MessageStanza(AbstractStanza.getRandomId(), MessageStanzaType.NORMAL);
     stanza.toJid = _jid;
     stanza.fromJid = _connection.fullJid;
     stanza.body = text;
@@ -68,15 +83,19 @@ class ChatImpl implements Chat {
   }
 
   // https://stackoverflow.com/questions/57095305/how-to-edit-and-delete-particular-message-from-xmpp-in-android
-  
+
+  //<message to='juliet@capulet.net/balcony' id='bad1'>
+  //   <body>But soft, what light through yonder airlock breaks?</body>
+  // </message>
+
   //<message to='juliet@capulet.net/balcony' id='good1'>
   //   <body>But soft, what light through yonder window breaks?</body>
   //   <replace id='bad1' xmlns='urn:xmpp:message-correct:0'/>
   // </message>
-  
+
   @override
   void updateMessage(String id, String text) {
-    var stanza = MessageStanza(AbstractStanza.getRandomId(), MessageStanzaType.CHAT);
+    var stanza = MessageStanza(AbstractStanza.getRandomId(), MessageStanzaType.NORMAL);
     stanza.toJid = _jid;
     stanza.fromJid = _connection.fullJid;
     stanza.body = text;
@@ -89,7 +108,11 @@ class ChatImpl implements Chat {
 
     var message = Message.fromStanza(stanza);
     int lastIndex = messages.indexWhere((element) => element?.messageStanza?.id == id);
-    messages[lastIndex] = message;
+    if (lastIndex != -1) {
+      messages[lastIndex] = message;
+    } else {
+      messages.add(message);
+    }
     _newMessageController.add(message);
     _connection.writeStanza(stanza);
   }
@@ -101,7 +124,7 @@ class ChatImpl implements Chat {
   @override
   void deleteMessage(String id) {
     var stanza =
-    MessageStanza(AbstractStanza.getRandomId(), MessageStanzaType.CHAT);
+    MessageStanza(AbstractStanza.getRandomId(), MessageStanzaType.NORMAL);
     stanza.toJid = _jid;
     stanza.fromJid = _connection.fullJid;
 
@@ -128,11 +151,15 @@ class ChatImpl implements Chat {
 
   @override
   set myState(ChatState state) {
-    var stanza = MessageStanza(AbstractStanza.getRandomId(), MessageStanzaType.CHAT);
+    var stanza = MessageStanza(AbstractStanza.getRandomId(), MessageStanzaType.NORMAL);
     stanza.toJid = _jid;
     stanza.fromJid = _connection.fullJid;
     var stateElement = XmppElement();
-    stateElement.name = state.toString().split('.').last.toLowerCase();
+    stateElement.name = state
+        .toString()
+        .split('.')
+        .last
+        .toLowerCase();
     stateElement.addAttribute(XmppAttribute('xmlns', 'http://jabber.org/protocol/chatstates'));
     stanza.addChild(stateElement);
     _connection.writeStanza(stanza);
@@ -142,14 +169,23 @@ class ChatImpl implements Chat {
 
 abstract class Chat {
   Jid get jid;
+
   ChatState get myState;
+
   ChatState get remoteState;
+
   Stream<Message> get newMessageStream;
+
   Stream<ChatState> get remoteStateStream;
+
   List<Message> messages;
+
   void sendMessage(String text);
+
   void updateMessage(String id, String text);
+
   void deleteMessage(String id);
+
   set myState(ChatState state);
 }
 
