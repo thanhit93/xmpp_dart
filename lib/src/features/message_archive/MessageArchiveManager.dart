@@ -6,6 +6,11 @@ import '../../data/Jid.dart';
 import '../../elements/stanzas/AbstractStanza.dart';
 import '../../elements/stanzas/IqStanza.dart';
 import '../../elements/forms/FieldElement.dart';
+import 'package:xmpp_stone/src/elements/XmppAttribute.dart';
+import 'package:xmpp_stone/src/elements/XmppElement.dart';
+import '../../logger/Log.dart';
+import 'package:tuple/tuple.dart';
+import 'dart:async';
 
 class MessageArchiveManager {
   static const TAG = 'MessageArchiveManager';
@@ -34,7 +39,12 @@ class MessageArchiveManager {
 
   bool get isQueryByJidSupported => MAMNegotiator.getInstance(_connection).isQueryByJidSupported;
 
-  MessageArchiveManager(this._connection);
+  final Map<String, Tuple2<IqStanza, Completer>> _myUnrespondedIqStanzas =
+  <String, Tuple2<IqStanza, Completer>>{};
+
+  MessageArchiveManager(this._connection) {
+    _connection.inStanzasStream.listen(_processStanza);
+  }
 
   void queryAll() {
     var iqStanza = IqStanza(AbstractStanza.getRandomId(), IqStanzaType.SET);
@@ -96,7 +106,133 @@ class MessageArchiveManager {
       if (jid != null) {
         x.addField(FieldElement.build(varAttr: 'with', value: jid.userAtDomain));
       }
+
+      //<iq type='set' id='q29302'>
+    //   <query xmlns='urn:xmpp:mam:0'>
+    //     <x xmlns='jabber:x:data' type='submit'>
+    //       <field var='FORM_TYPE' type='hidden'>
+    //         <value>urn:xmpp:mam:0</value>
+    //       </field>
+    //       <field var='with'>
+    //         <value>juliet@capulet.lit</value>
+    //       </field>
+    //     </x>
+    //     <set xmlns='http://jabber.org/protocol/rsm'>
+    //      <max>20</max>
+    //      <before/>
+    //     </set>
+    //   </query>
+    // </iq>
+
+      var set = XmppElement();
+      set.name = 'set';
+      set.addAttribute(XmppAttribute('xmlns', 'http://jabber.org/protocol/rsm'));
+
+      var max = XmppElement();
+      max.name = 'max';
+      max.textValue = '20';
+      set.addChild(max);
+
+      var before = XmppElement();
+      before.name = 'before';
+      set.addChild(before);
+
+      query.addChild(set);
+
       _connection.writeStanza(iqStanza);
+    }
+  }
+
+  void fetchHistoryChat(Jid jid) {
+    //<iq id='a5sV8-21' type='set'>
+    //     <query xmlns='urn:xmpp:mam:0' queryid="12345678">
+    //         <x xmlns="jabber:x:data" type="submit">
+    //             <field var="FORM_TYPE" type="hidden"><value>urn:xmpp:mam:0</value></field>
+    //             <field var="with"><value>id@domain</value></field>
+    //         </x>
+    //         <set xmlns="http://jabber.org/protocol/rsm">
+    //             <max>message_count</max>
+    //         </set>
+    //     </query>
+    // </iq>
+
+    var iqStanza = IqStanza(AbstractStanza.getRandomId(), IqStanzaType.SET);
+    var query = QueryElement();
+    query.setXmlns('urn:xmpp:mam:0');
+    query.setQueryId(AbstractStanza.getRandomId());
+    iqStanza.addChild(query);
+    var x = XElement.build();
+    x.setType(FormType.SUBMIT);
+    query.addChild(x);
+    x.addField(FieldElement.build(
+        varAttr: 'FORM_TYPE', typeAttr: 'hidden', value: 'urn:xmpp:mam:0'));
+    if (jid != null) {
+      x.addField(FieldElement.build(varAttr: 'with', value: jid.userAtDomain));
+    }
+    var set = XmppElement();
+    set.name = 'set';
+    set.addAttribute(XmppAttribute('xmlns', 'http://jabber.org/protocol/rsm'));
+
+    var max = XmppElement();
+    max.name = 'max';
+    max.textValue = '100';
+    set.addChild(max);
+
+    query.addChild(set);
+
+    _connection.writeStanza(iqStanza);
+  }
+
+  //https://xmpp.org/extensions/xep-0136.html
+  Future<bool> fetchLastMessage(Jid jid) {
+    // <iq type='get' id='page1'>
+    // <retrieve xmlns='urn:xmpp:archive'
+    // with='juliet@capulet.com/chamber'
+    // start='1469-07-21T02:56:15Z'>
+    // <set xmlns='http://jabber.org/protocol/rsm'>
+    // <max>100</max>
+    // </set>
+    // </retrieve>
+    // </iq>
+    var completer = Completer<bool>();
+    var iqStanza = IqStanza(AbstractStanza.getRandomId(), IqStanzaType.GET);
+    iqStanza.fromJid = _connection.fullJid;
+    iqStanza.toFullJid = jid;
+    var retrieve = XmppElement();
+    retrieve.name = 'retrieve';
+    retrieve.addAttribute(XmppAttribute('xmlns', 'urn:xmpp:archive'));
+    retrieve.addAttribute(XmppAttribute('with', jid.fullJid));
+    retrieve.addAttribute(XmppAttribute('start', '2020-01-21T02:56:15Z'));
+
+    var set = XmppElement();
+    set.name = 'set';
+    set.addAttribute(XmppAttribute('xmlns', 'http://jabber.org/protocol/rsm'));
+
+    var max = XmppElement();
+    max.name = 'max';
+    max.textValue = '100';
+    set.addChild(max);
+
+    retrieve.addChild(set);
+
+    iqStanza.addChild(retrieve);
+    _myUnrespondedIqStanzas[iqStanza.id] = Tuple2(iqStanza, completer);
+    _connection.writeStanza(iqStanza);
+
+    return completer.future;
+  }
+
+  void _processStanza(AbstractStanza stanza) {
+    Log.xmppp_receiving('start log MAM Thanh test');
+    Log.xmppp_receiving(stanza.buildXmlString());
+    Log.xmppp_receiving('end log MAM Thanh test');
+    if (stanza is IqStanza) {
+      var unrespondedStanza = _myUnrespondedIqStanzas[stanza.id];
+      if (_myUnrespondedIqStanzas[stanza.id] != null) {
+        if (stanza.type == IqStanzaType.RESULT) {
+          unrespondedStanza.item2.complete(true);
+        }
+      }
     }
   }
 }
@@ -107,3 +243,4 @@ extension MamModuleGetter on Connection {
     return MessageArchiveManager.getInstance(this);
   }
 }
+
