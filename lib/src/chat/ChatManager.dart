@@ -4,6 +4,7 @@ import 'package:xmpp_stone/src/Connection.dart';
 import 'package:xmpp_stone/src/chat/Chat.dart';
 import 'package:xmpp_stone/src/data/Jid.dart';
 import 'package:xmpp_stone/xmpp_stone.dart';
+import '../logger/Log.dart';
 
 class ChatManager {
   static Map<Connection, ChatManager> instances =
@@ -27,6 +28,9 @@ class ChatManager {
         .map((stanza) => stanza as MessageStanza)
         .listen((stanza) {
           var message = Message.fromStanza(stanza);
+          
+          Log.xmppp_receiving('ChatManager');
+          Log.xmppp_receiving(stanza.buildXmlString());
           // find jid different from mine
           var buddyJid = _connection.fullJid.userAtDomain == message.to.userAtDomain ?
               message?.from : message?.to;
@@ -61,3 +65,4 @@ class ChatManager {
     return chat;
   }
 }
+
