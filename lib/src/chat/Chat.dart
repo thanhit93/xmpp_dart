@@ -51,7 +51,7 @@ class ChatImpl implements Chat {
     }
 
     if (message?.chatState != null && !(message?.isDelayed ?? false)) {
-     if (_connection.fullJid.userAtDomain == message.to.userAtDomain) {
+     if (_connection.fullJid.userAtDomain == message.to.userAtDomain && message.type != MessageStanzaType.ERROR) {
        _remoteState = message.chatState;
        _remoteStateController.add(message.chatState);
      }
