@@ -143,45 +143,48 @@ class MessageArchiveManager {
     }
   }
 
-  void fetchHistoryChat(Jid jid) {
-    //<iq id='a5sV8-21' type='set'>
-    //     <query xmlns='urn:xmpp:mam:0' queryid="12345678">
-    //         <x xmlns="jabber:x:data" type="submit">
-    //             <field var="FORM_TYPE" type="hidden"><value>urn:xmpp:mam:0</value></field>
-    //             <field var="with"><value>id@domain</value></field>
-    //         </x>
-    //         <set xmlns="http://jabber.org/protocol/rsm">
-    //             <max>message_count</max>
-    //         </set>
-    //     </query>
-    // </iq>
-
-    var iqStanza = IqStanza(AbstractStanza.getRandomId(), IqStanzaType.SET);
-    var query = QueryElement();
-    query.setXmlns('urn:xmpp:mam:0');
-    query.setQueryId(AbstractStanza.getRandomId());
-    iqStanza.addChild(query);
-    var x = XElement.build();
-    x.setType(FormType.SUBMIT);
-    query.addChild(x);
-    x.addField(FieldElement.build(
-        varAttr: 'FORM_TYPE', typeAttr: 'hidden', value: 'urn:xmpp:mam:0'));
-    if (jid != null) {
-      x.addField(FieldElement.build(varAttr: 'with', value: jid.userAtDomain));
-    }
-    var set = XmppElement();
-    set.name = 'set';
-    set.addAttribute(XmppAttribute('xmlns', 'http://jabber.org/protocol/rsm'));
-
-    var max = XmppElement();
-    max.name = 'max';
-    max.textValue = '100';
-    set.addChild(max);
-
-    query.addChild(set);
-
-    _connection.writeStanza(iqStanza);
-  }
+  // void fetchHistoryChat(Jid fromJid, Jid toJid,) {
+  //   //<iq id='a5sV8-21' type='set'>
+  //   //     <query xmlns='urn:xmpp:mam:0' queryid="12345678">
+  //   //         <x xmlns="jabber:x:data" type="submit">
+  //   //             <field var="FORM_TYPE" type="hidden"><value>urn:xmpp:mam:0</value></field>
+  //   //             <field var="with"><value>id@domain</value></field>
+  //   //         </x>
+  //   //         <set xmlns="http://jabber.org/protocol/rsm">
+  //   //             <max>message_count</max>
+  //   //         </set>
+  //   //     </query>
+  //   // </iq>
+  //
+  //   var iqStanza = IqStanza(AbstractStanza.getRandomId(), IqStanzaType.SET);
+  //   iqStanza.fromJid = fromJid;
+  //   iqStanza.toJid = toJid;
+  //  
+  //   var query = QueryElement();
+  //   query.setXmlns('urn:xmpp:mam:2');
+  //   query.setQueryId(AbstractStanza.getRandomId());
+  //   iqStanza.addChild(query);
+  //   var x = XElement.build();
+  //   x.setType(FormType.SUBMIT);
+  //   query.addChild(x);
+  //   x.addField(FieldElement.build(
+  //       varAttr: 'FORM_TYPE', typeAttr: 'hidden', value: 'urn:xmpp:mam:2'));
+  //   if (jid != null) {
+  //     x.addField(FieldElement.build(varAttr: 'with', value: jid.userAtDomain));
+  //   }
+  //   var set = XmppElement();
+  //   set.name = 'set';
+  //   set.addAttribute(XmppAttribute('xmlns', 'http://jabber.org/protocol/rsm'));
+  //
+  //   var max = XmppElement();
+  //   max.name = 'max';
+  //   max.textValue = '100';
+  //   set.addChild(max);
+  //
+  //   query.addChild(set);
+  //
+  //   _connection.writeStanza(iqStanza);
+  // }
 
   //https://xmpp.org/extensions/xep-0136.html
   Future<bool> fetchLastMessage(Jid jid) {
@@ -222,15 +225,67 @@ class MessageArchiveManager {
     return completer.future;
   }
 
+  Future<bool> getOnlineOfflinePeer(Jid jid) {
+    var completer = Completer<bool>();
+    var iqStanza = IqStanza(AbstractStanza.getRandomId(), IqStanzaType.GET);
+    iqStanza.toJid = jid;
+    var query = QueryElement();
+    query.addAttribute(XmppAttribute('xmlns', 'jabber:iq:last'));
+    iqStanza.addChild(query);
+    _myUnrespondedIqStanzas[iqStanza.id] = Tuple2(iqStanza, completer);
+    _connection.writeStanza(iqStanza);
+    return completer.future;
+  }
+
   void _processStanza(AbstractStanza stanza) {
-    Log.xmppp_receiving('start log MAM Thanh test');
-    Log.xmppp_receiving(stanza.buildXmlString());
-    Log.xmppp_receiving('end log MAM Thanh test');
     if (stanza is IqStanza) {
       var unrespondedStanza = _myUnrespondedIqStanzas[stanza.id];
       if (_myUnrespondedIqStanzas[stanza.id] != null) {
+        Log.xmppp_receiving('Check User Online Ofline');
+        Log.xmppp_receiving(stanza.buildXmlString());
+
+
+        // if (xmppElement != null && xmppElement.getNameSpace() == 'jabber:iq:last') {
+        //   xmppElement.children.forEach((child) {
+        //     if (child.name == 'item') {
+        //       var jid = Jid.fromFullJid(child.getAttribute('jid').value);
+        //       var name = child.getAttribute('name')?.value;
+        //       var subscriptionString = child.getAttribute('subscription')?.value;
+        //       var buddy = Buddy(jid);
+        //       buddy.name = name;
+        //       buddy.accountJid = _connection.fullJid;
+        //       buddy.subscriptionType = Buddy.typeFromString(subscriptionString);
+        //       _rosterMap[jid] = buddy;
+        //     }
+        //   });
+        // }
+
         if (stanza.type == IqStanzaType.RESULT) {
-          unrespondedStanza.item2.complete(true);
+          //<iq lang="en" to="5@onllearn.vn/xmpp" from="2@onllearn.vn" type="result" id="IXGSKYMTX">
+          //   <query seconds="11" xmlns="jabber:iq:last">Stream reset by peer</query>
+          // </iq>
+
+          var xmppElement = stanza.getChild('query');
+          String second = xmppElement.getAttribute('seconds')?.value;
+          if (xmppElement != null && xmppElement.getNameSpace() == 'jabber:iq:last' && second != null) {
+            if ((int.parse(second)) == 0) {
+              unrespondedStanza.item2.complete(true);
+            } else {
+              unrespondedStanza.item2.complete(false);
+            }
+          } else {
+            unrespondedStanza.item2.complete(false);
+          }
+
+        } else {
+          //<iq lang="en" to="5@onllearn.vn/xmpp" from="2@onllearn.vn" type="error" id="XHYPCCJEK">
+          //   <query xmlns="jabber:iq:last"/>
+          //   <error code="407" type="auth">
+          //     <subscription-required xmlns="urn:ietf:params:xml:ns:xmpp-stanzas"/>
+          //     <text lang="en" xmlns="urn:ietf:params:xml:ns:xmpp-stanzas">Not subscribed</text>
+          //   </error>
+          // </iq>
+          unrespondedStanza.item2.complete(false);
         }
       }
     }
@@ -243,4 +298,3 @@ extension MamModuleGetter on Connection {
     return MessageArchiveManager.getInstance(this);
   }
 }
-
