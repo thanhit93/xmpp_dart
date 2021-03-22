@@ -84,8 +84,12 @@ class ServiceDiscoveryNegotiator extends Negotiator {
     request.toJid = _connection.serverName;
     var queryElement = XmppElement();
     queryElement.name = 'query';
-    queryElement.addAttribute(
-        XmppAttribute('xmlns', 'http://jabber.org/protocol/disco#info'));
+    queryElement.addAttribute(XmppAttribute('xmlns', 'http://jabber.org/protocol/disco#info'));
+
+    var feature = Feature();
+    feature.addAttribute(XmppAttribute('var', 'urn:xmpp:message-correct:0'));
+    queryElement.addChild(feature);
+
     request.addChild(queryElement);
     fullRequestStanza = request;
     _connection.writeStanza(request);
