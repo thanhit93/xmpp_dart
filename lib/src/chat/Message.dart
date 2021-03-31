@@ -35,13 +35,13 @@ class Message {
 
   Message(this._messageStanza, this._to, this._from, this._text, this._time,
       {String stanzaId = '',
-      String threadId = '',
-      bool isForwarded = false,
-      bool isDelayed,
-      String queryId,
-      String messageId,
-      MessageStanzaType type,
-      ChatState chatState}) {
+        String threadId = '',
+        bool isForwarded = false,
+        bool isDelayed,
+        String queryId,
+        String messageId,
+        MessageStanzaType type,
+        ChatState chatState}) {
     _stanzaId = stanzaId;
     _threadId = threadId;
     _isForwarded = isForwarded;
@@ -57,9 +57,9 @@ class Message {
   static Message fromStanza(MessageStanza stanza) {
     Message message;
     var isCarbon = stanza.children.any(
-        (element) => (element.name == 'sent' || element.name == 'received'));
+            (element) => (element.name == 'sent' || element.name == 'received'));
     var isArchivedMessage =
-        stanza.children.any((element) => (element.name == 'result'));
+    stanza.children.any((element) => (element.name == 'result'));
     if (isCarbon) {
       message = _parseCarbon(stanza);
     } else if (isArchivedMessage) {
@@ -71,13 +71,14 @@ class Message {
 
   static Message _parseCarbon(MessageStanza stanza) {
     var carbon = stanza.children.firstWhere(
-        (element) => (element.name == 'sent' || element.name == 'received'),
+            (element) => (element.name == 'sent' || element.name == 'received'),
         orElse: () => null);
     try {
       var forwarded = carbon.getChild('forwarded');
       if (forwarded != null) {
         var message = forwarded.getChild('message');
         if (message != null) {
+          var messageId = message.getAttribute('id')?.value;
           var to = Jid.fromFullJid(message.getAttribute('to')?.value);
           var from = Jid.fromFullJid(message.getAttribute('from')?.value);
           var body = message.getChild('body')?.textValue;
@@ -88,11 +89,13 @@ class Message {
           var delayed = dateTime != null;
           dateTime ??= DateTime.now();
           return Message(stanza, to, from, body, dateTime,
-              threadId: threadId,
-              isForwarded: true,
-              isDelayed: delayed,
-              chatState: chatState,
-              type: type);
+            threadId: threadId,
+            isForwarded: true,
+            isDelayed: delayed,
+            chatState: chatState,
+            type: type,
+            messageId: messageId,
+          );
         }
       }
     } catch (e) {
@@ -103,20 +106,22 @@ class Message {
 
   static Message _parseArchived(MessageStanza stanza) {
     var result = stanza.children.firstWhere(
-        (element) => (element.name == 'result'),
+            (element) => (element.name == 'result'),
         orElse: () => null);
     try {
-      var queryId = result?.getAttribute('queryId')?.value;
+      var queryId = result
+          ?.getAttribute('queryId')
+          ?.value;
       var forwarded = result.getChild('forwarded');
       if (forwarded != null) {
         var message = forwarded.getChild('message');
         if (message != null) {
+          var messageId = message.getAttribute('id')?.value;
           var to = Jid.fromFullJid(message.getAttribute('to')?.value);
           var from = Jid.fromFullJid(message.getAttribute('from')?.value);
           var body = message.getChild('body')?.textValue;
           var threadId = message.getChild('thread')?.textValue;
-          var stanzaId =
-              message.getChild('stanza-id')?.getAttribute('id')?.value;
+          var stanzaId = message.getChild('stanza-id')?.getAttribute('id')?.value;
           var type = (_parseType(message));
           var dateTime = _parseDelayed(forwarded);
           dateTime ??= DateTime.now();
@@ -129,7 +134,8 @@ class Message {
               isDelayed: delayed,
               stanzaId: stanzaId,
               chatState: chatState,
-              type: type);
+              type: type,
+              messageId: messageId);
         }
       }
     } catch (e) {
@@ -167,9 +173,8 @@ class Message {
 
   static ChatState _parseState(XmppElement element) {
     var stateElement = element.children.firstWhere(
-        (element) =>
-            element.getAttribute('xmlns')?.value ==
-            'http://jabber.org/protocol/chatstates',
+            (element) =>
+        element.getAttribute('xmlns')?.value == 'http://jabber.org/protocol/chatstates',
         orElse: () => null);
     if (stateElement != null) {
       return _stateFromString(stateElement.name);
